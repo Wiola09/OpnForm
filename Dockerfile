@@ -18,7 +18,9 @@ RUN cp .env.docker .env
 
 ARG CLAUDE_API_KEY
 ENV CLAUDE_API_KEY=$CLAUDE_API_KEY
-RUN sed -i "s|\"NUXT_PUBLIC_APP_URL=/"|\"NUXT_PUBLIC_APP_URL=${CLAUDE_API_KEY}\"|g" .env
+
+RUN sed -i "s|^NUXT_PUBLIC_APP_URL=.*$|NUXT_PUBLIC_APP_URL=${CLAUDE_API_KEY}|g" .env
+
 RUN npm run build
 
 # syntax=docker/dockerfile:1.3-labs
