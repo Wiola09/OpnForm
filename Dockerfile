@@ -21,9 +21,7 @@ ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
 
 #RUN sed -i "s|^NUXT_PUBLIC_APP_URL=.*$|NUXT_PUBLIC_APP_URL=${CLAUDE_API_KEY}|g" .env
 
-U redu, evo kako bi to izgledalo unutar komande RUN:
 
-```
 RUN echo "APP_NAME=OpnForm\n\
 APP_ENV=local\n\
 APP_KEY=\n\
