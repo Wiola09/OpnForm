@@ -19,71 +19,30 @@ ADD client /app/
 ARG NUXT_PUBLIC_APP_URL
 ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
 
-#RUN sed -i "s|^NUXT_PUBLIC_APP_URL=.*$|NUXT_PUBLIC_APP_URL=${CLAUDE_API_KEY}|g" .env
 
 
-RUN echo "APP_NAME=OpnForm\n\
-APP_ENV=local\n\
-APP_KEY=\n\
-APP_DEBUG=false\n\
-APP_LOG_LEVEL=debug\n\
-APP_URL=${NUXT_PUBLIC_APP_URL}\n\
-\n\
-LOG_CHANNEL=errorlog\n\
-LOG_LEVEL=debug\n\
-\n\
-DB_CONNECTION=pgsql\n\
-DB_HOST=127.0.0.1\n\
-DB_PORT=5432\n\
-DB_DATABASE=postgres\n\
-DB_USERNAME=postgres\n\
-DB_PASSWORD=postgres\n\
-\n\
-FILESYSTEM_DRIVER=s3\n\
-FILESYSTEM_DISK=s3\n\
-\n\
-BROADCAST_DRIVER=log\n\
-CACHE_DRIVER=redis\n\
-QUEUE_CONNECTION=redis\n\
-SESSION_DRIVER=file\n\
-SESSION_LIFETIME=120\n\
-\n\
-REDIS_HOST=127.0.0.1\n\
-REDIS_PASSWORD=null\n\
-REDIS_PORT=6379\n\
-\n\
-MAIL_MAILER=log\n\
-MAIL_HOST=\n\
-MAIL_PORT=\n\
-MAIL_USERNAME=\n\
-MAIL_PASSWORD=\n\
-MAIL_ENCRYPTION=\n\
-MAIL_FROM_ADDRESS=\n\
-MAIL_FROM_NAME=\n\
-\n\
-AWS_ACCESS_KEY_ID=\n\
-AWS_SECRET_ACCESS_KEY=\n\
-AWS_DEFAULT_REGION=us-east-1\n\
-AWS_BUCKET=\n\
-\n\
-PUSHER_APP_ID=\n\
-PUSHER_APP_KEY=\n\
-PUSHER_APP_SECRET=\n\
-PUSHER_APP_CLUSTER=mt1\n\
-\n\
-MIX_PUSHER_APP_KEY=${PUSHER_APP_KEY}\n\
-MIX_PUSHER_APP_CLUSTER=${PUSHER_APP_CLUSTER}\n\
-\n\
-JWT_TTL=1440\n\
-JWT_SECRET=\n\
-\n\
-MUX_WORKSPACE_ID=\n\
-MUX_API_TOKEN=\n\
-\n\
-OPEN_AI_API_KEY=" > .env
+ARG PHP_PACKAGES="php8.1 composer php8.1-common php8.1-pgsql php8.1-redis php8.1-mbstring\
+        php8.1-simplexml php8.1-bcmath php8.1-gd php8.1-curl php8.1-zip\
+        php8.1-imagick php8.1-bz2 php8.1-gmp php8.1-int php8.1-pcov php8.1-soap php8.1-xsl"
+        
+ARG NUXT_PUBLIC_APP_URL
+ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
+FROM node:20-alpine AS javascript-builder
+WORKDIR /app
 
+# It's best to add as few files as possible before running the build commands
+# as they will be re-run everytime one of those files changes.
+#
+# It's possible to run npm install with only the package.json and package-lock.json file.
 
+ADD client/package.json client/package-lock.json ./
+RUN npm install
 
+ARG NUXT_PUBLIC_APP_URL
+ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
+
+ADD client /app/
+RUN cp .env.docker .env
 RUN npm run build
 
 # syntax=docker/dockerfile:1.3-labs
@@ -147,43 +106,12 @@ ADD docker/php-fpm.conf /etc/php/8.1/fpm/pool.d/
 ADD docker/nginx.conf /etc/nginx/sites-enabled/default
 ADD docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-ADD . .
-
 ARG NUXT_PUBLIC_APP_URL
 ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
-#ADD .env.docker .env
-RUN echo "NUXT_LOG_LEVEL=\n\
-NUXT_PUBLIC_APP_URL=${NUXT_PUBLIC_APP_URL}\n\
-NUXT_PUBLIC_API_BASE=${NUXT_PUBLIC_APP_URL}/api\n\
-NUXT_PRIVATE_API_BASE=${NUXT_PUBLIC_APP_URL}/api\n\
-NUXT_PUBLIC_AI_FEATURES_ENABLED=false\n\
-NUXT_PUBLIC_AMPLITUDE_CODE=\n\
-NUXT_PUBLIC_CRISP_WEBSITE_ID=\n\
-NUXT_PUBLIC_CUSTOM_DOMAINS_ENABLED=true\n\
-NUXT_PUBLIC_ENV=local\n\
-NUXT_PUBLIC_GOOGLE_ANALYTICS_CODE=\n\
-NUXT_PUBLIC_H_CAPTCHA_SITE_KEY=\n\
-NUXT_PUBLIC_PAID_PLANS_ENABLED=\n\
-NUXT_PUBLIC_S3_ENABLED=false\n\
-NUXT_API_SECRET=" > .env
 
-RUN echo "NUXT_LOG_LEVEL=\n\
-NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL\n\
-NUXT_PUBLIC_API_BASE=$NUXT_PUBLIC_APP_URL/api\n\
-NUXT_PRIVATE_API_BASE=$NUXT_PUBLIC_APP_URL/api\n\
-NUXT_PUBLIC_AI_FEATURES_ENABLED=false\n\
-NUXT_PUBLIC_AMPLITUDE_CODE=\n\
-NUXT_PUBLIC_CRISP_WEBSITE_ID=\n\
-NUXT_PUBLIC_CUSTOM_DOMAINS_ENABLED=true\n\
-NUXT_PUBLIC_ENV=local\n\
-NUXT_PUBLIC_GOOGLE_ANALYTICS_CODE=\n\
-NUXT_PUBLIC_H_CAPTCHA_SITE_KEY=\n\
-NUXT_PUBLIC_PAID_PLANS_ENABLED=\n\
-NUXT_PUBLIC_S3_ENABLED=false\n\
-NUXT_API_SECRET=" > client/.env
-
-
-#ADD client/.env.docker client/.env
+ADD . .
+ADD .env.docker .env
+ADD client/.env.docker client/.env
 
 COPY --from=javascript-builder /app/.output/ ./nuxt/
 RUN cp -r nuxt/public .
