@@ -14,34 +14,6 @@ ADD client/package.json client/package-lock.json ./
 RUN npm install
 
 ADD client /app/
-#RUN cp .env.docker .env
-
-ARG NUXT_PUBLIC_APP_URL
-ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
-
-
-
-ARG PHP_PACKAGES="php8.1 composer php8.1-common php8.1-pgsql php8.1-redis php8.1-mbstring\
-        php8.1-simplexml php8.1-bcmath php8.1-gd php8.1-curl php8.1-zip\
-        php8.1-imagick php8.1-bz2 php8.1-gmp php8.1-int php8.1-pcov php8.1-soap php8.1-xsl"
-        
-ARG NUXT_PUBLIC_APP_URL
-ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
-FROM node:20-alpine AS javascript-builder
-WORKDIR /app
-
-# It's best to add as few files as possible before running the build commands
-# as they will be re-run everytime one of those files changes.
-#
-# It's possible to run npm install with only the package.json and package-lock.json file.
-
-ADD client/package.json client/package-lock.json ./
-RUN npm install
-
-ARG NUXT_PUBLIC_APP_URL
-ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
-
-ADD client /app/
 RUN cp .env.docker .env
 RUN npm run build
 
@@ -105,9 +77,6 @@ ADD docker/postgres-wrapper.sh docker/php-fpm-wrapper.sh docker/redis-wrapper.sh
 ADD docker/php-fpm.conf /etc/php/8.1/fpm/pool.d/
 ADD docker/nginx.conf /etc/nginx/sites-enabled/default
 ADD docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-ARG NUXT_PUBLIC_APP_URL
-ENV NUXT_PUBLIC_APP_URL=$NUXT_PUBLIC_APP_URL
 
 ADD . .
 ADD .env.docker .env
