@@ -1,39 +1,46 @@
-# Bazni image za JavaScript build
+ARG PHP_PACKAGES="php8.1 composer php8.1-common php8.1-pgsql php8.1-redis php8.1-mbstring\
+        php8.1-simplexml php8.1-bcmath php8.1-gd php8.1-curl php8.1-zip\
+        php8.1-imagick php8.1-bz2 php8.1-gmp php8.1-int php8.1-pcov php8.1-soap php8.1-xsl"
+
 FROM node:20-alpine AS javascript-builder
 WORKDIR /app
 
-# Dodavanje samo potrebnih fajlova za build
-ADD client/package.json client/package-lock.json ./
-RUN npm install --legacy-peer-deps
+# It's best to add as few files as possible before running the build commands
+# as they will be re-run everytime one of those files changes.
+#
+# It's possible to run npm install with only the package.json and package-lock.json file.
 
-# Dodavanje ostatka klijentskog koda i build
+ADD client/package.json client/package-lock.json ./
+RUN npm install
+
 ADD client /app/
 RUN cp .env.docker .env
 RUN npm run build
 
-# Bazni image za PHP dependency instalaciju
-FROM --platform=linux/amd64 ubuntu:22.04 AS php-dependency-installer
+# syntax=docker/dockerfile:1.3-labs
+FROM --platform=linux/amd64 ubuntu:23.04 AS php-dependency-installer
 
 ARG PHP_PACKAGES
 
-# Dodavanje PostgreSQL i drugih paketa
-RUN apt-get update && apt-get install -y \
-    wget gnupg2 lsb-release \
-    && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
-    && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
-    && apt-get update && apt-get install -y \
-    $PHP_PACKAGES composer postgresql-15 redis php8.1-fpm && \
-    apt-get clean
+RUN apt-get update \
+    && apt-get install -y $PHP_PACKAGES composer
 
 WORKDIR /app
 ADD composer.json composer.lock artisan ./
 
-# Optimizacija za composer install bez ponovnog preuzimanja zavisnosti
+# NOTE: The project would build more reliably if all php files were added before running
+# composer install.  This would though introduce a dependency which would cause every
+# dependency to be re-installed each time any php file is edited.  It may be necessary in
+# future to remove this 'optimisation' by moving the `RUN composer install` line after all
+# the following ADD commands.
+
+# Running artisan requires the full php app to be installed so we need to remove the
+# post-autoload command from the composer file if we want to run composer without
+# adding a dependency to all the php files.
 RUN sed 's_@php artisan package:discover_/bin/true_;' -i composer.json
 ADD app/helpers.php /app/app/helpers.php
 RUN composer install --ignore-platform-req=php
 
-# Dodavanje aplikacije
 ADD app /app/app
 ADD bootstrap /app/bootstrap
 ADD config /app/config
@@ -42,55 +49,50 @@ ADD public public
 ADD routes routes
 ADD tests tests
 
-# Pokretanje artisan komandi
+# Manually run the command we deleted from composer.json earlier
 RUN php artisan package:discover --ansi
 
-# Glavni bazni image za aplikaciju
-FROM --platform=linux/amd64 ubuntu:22.04
 
-# Komanda za pokretanje supervisora
+FROM --platform=linux/amd64 ubuntu:23.04
+
+# supervisord is a process manager which will be responsible for managing the
+# various server processes.  These are configured in docker/supervisord.conf
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 
 WORKDIR /app
 
 ARG PHP_PACKAGES
 
-# Instalacija PHP, PostgreSQL, Redis i drugih paketa
-RUN apt-get update && apt-get install -y \
-    supervisor nginx sudo postgresql-15 redis \
-    $PHP_PACKAGES php8.1-fpm wget && \
-    apt-get clean
+RUN apt-get update \
+    && apt-get install -y \
+        supervisor nginx sudo postgresql-15 redis\
+        $PHP_PACKAGES php8.1-fpm wget\
+    && apt-get clean
 
-# Kreiranje korisnika za Nuxt aplikaciju
 RUN useradd nuxt && mkdir ~nuxt && chown nuxt ~nuxt
 RUN wget -qO- https://raw.githubusercontent.com/creationix/nvm/v0.39.3/install.sh | sudo -u nuxt bash
 RUN sudo -u nuxt bash -c ". ~nuxt/.nvm/nvm.sh && nvm install --no-progress 20"
 
-# Dodavanje wrapper skripti i konfiguracija
 ADD docker/postgres-wrapper.sh docker/php-fpm-wrapper.sh docker/redis-wrapper.sh docker/nuxt-wrapper.sh docker/generate-api-secret.sh /usr/local/bin/
 ADD docker/php-fpm.conf /etc/php/8.1/fpm/pool.d/
 ADD docker/nginx.conf /etc/nginx/sites-enabled/default
 ADD docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Dodavanje ostatka aplikacije
 ADD . .
 ADD .env.docker .env
 ADD client/.env.docker client/.env
 
-# Kopiranje buildovanog nuxt-a
 COPY --from=javascript-builder /app/.output/ ./nuxt/
 RUN cp -r nuxt/public .
-
-# Kopiranje vendor foldera sa PHP zavisnostima
 COPY --from=php-dependency-installer /app/vendor/ ./vendor/
 
-# Podešavanje permisija i konfiguracija
 RUN chmod a+x /usr/local/bin/*.sh /app/artisan \
     && ln -s /app/artisan /usr/local/bin/artisan \
     && useradd opnform \
-    && echo "daemon off;" >> /etc/nginx/nginx.conf \
-    && echo "daemonize no" >> /etc/redis/redis.conf \
-    && echo "appendonly yes" >> /etc/redis/redis.conf \
+    && echo "daemon off;" >> /etc/nginx/nginx.conf\
+    && echo "daemonize no" >> /etc/redis/redis.conf\
+    && echo "appendonly yes" >> /etc/redis/redis.conf\
     && echo "dir /persist/redis/data" >> /etc/redis/redis.conf
+
 
 EXPOSE 80
