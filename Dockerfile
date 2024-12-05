@@ -13,6 +13,8 @@ WORKDIR /app
 ADD client/package.json client/package-lock.json ./
 RUN npm install
 
+RUN npm install --legacy-peer-deps
+
 ADD client /app/
 RUN cp .env.docker .env
 RUN npm run build
